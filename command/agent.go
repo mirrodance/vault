@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/errwrap"
 	log "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/command/agent/auth"
+	"github.com/hashicorp/vault/command/agent/auth/alibaba"
 	"github.com/hashicorp/vault/command/agent/auth/aws"
 	"github.com/hashicorp/vault/command/agent/auth/jwt"
 	"github.com/hashicorp/vault/command/agent/config"
@@ -281,6 +282,16 @@ func (c *AgentCommand) Run(args []string) int {
 		})
 		if err != nil {
 			c.UI.Error(errwrap.Wrapf("Error creating jwt auth method: {{err}}", err).Error())
+			return 1
+		}
+	case "alibaba":
+		method, err = alibaba.NewAlibabaAuthMethod(&auth.AuthConfig{
+			Logger:    c.logger.Named("auth.alibaba"),
+			MountPath: config.AutoAuth.Method.MountPath,
+			Config:    config.AutoAuth.Method.Config,
+		})
+		if err != nil {
+			c.UI.Error(errwrap.Wrapf("Error creating alibaba auth method: {{err}}", err).Error())
 			return 1
 		}
 	default:
