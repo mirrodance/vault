@@ -10,6 +10,8 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
+	"github.com/hashicorp/vault/helper/hclutil"
+	"github.com/hashicorp/vault/helper/identity"
 	"github.com/hashicorp/vault/helper/parseutil"
 	"github.com/mitchellh/copystructure"
 )
@@ -80,10 +82,11 @@ var (
 // Policy is used to represent the policy specified by
 // an ACL configuration.
 type Policy struct {
-	Name  string       `hcl:"name"`
-	Paths []*PathRules `hcl:"-"`
-	Raw   string
-	Type  PolicyType
+	Name      string       `hcl:"name"`
+	Paths     []*PathRules `hcl:"-"`
+	Raw       string
+	Type      PolicyType
+	Templated bool
 }
 
 // PathRules represents a policy for a path in the namespace.
@@ -151,6 +154,15 @@ func (p *ACLPermissions) Clone() (*ACLPermissions, error) {
 // intermediary set of policies, before being compiled into
 // the ACL
 func ParseACLPolicy(rules string) (*Policy, error) {
+	// Check for templating
+	hasTemplating, _, err := identity.PopulateString(&identity.PopulateStringInput{
+		ValidityCheckOnly: true,
+		String:            rules,
+	})
+	if err != nil {
+		return nil, errwrap.Wrapf("failed to validate policy templating: {{err}}", err)
+	}
+
 	// Parse the rules
 	root, err := hcl.Parse(rules)
 	if err != nil {
@@ -168,7 +180,7 @@ func ParseACLPolicy(rules string) (*Policy, error) {
 		"name",
 		"path",
 	}
-	if err := checkHCLKeys(list, valid); err != nil {
+	if err := hclutil.CheckHCLKeys(list, valid); err != nil {
 		return nil, errwrap.Wrapf("failed to parse policy: {{err}}", err)
 	}
 
@@ -176,6 +188,7 @@ func ParseACLPolicy(rules string) (*Policy, error) {
 	var p Policy
 	p.Raw = rules
 	p.Type = PolicyTypeACL
+	p.Templated = hasTemplating
 	if err := hcl.DecodeObject(&p, list); err != nil {
 		return nil, errwrap.Wrapf("failed to parse policy: {{err}}", err)
 	}
@@ -205,7 +218,7 @@ func parsePaths(result *Policy, list *ast.ObjectList) error {
 			"min_wrapping_ttl",
 			"max_wrapping_ttl",
 		}
-		if err := checkHCLKeys(item.Val, valid); err != nil {
+		if err := hclutil.CheckHCLKeys(item.Val, valid); err != nil {
 			return multierror.Prefix(err, fmt.Sprintf("path %q:", key))
 		}
 
@@ -304,31 +317,4 @@ func parsePaths(result *Policy, list *ast.ObjectList) error {
 
 	result.Paths = paths
 	return nil
-}
-
-func checkHCLKeys(node ast.Node, valid []string) error {
-	var list *ast.ObjectList
-	switch n := node.(type) {
-	case *ast.ObjectList:
-		list = n
-	case *ast.ObjectType:
-		list = n.List
-	default:
-		return fmt.Errorf("cannot check HCL keys of type %T", n)
-	}
-
-	validMap := make(map[string]struct{}, len(valid))
-	for _, v := range valid {
-		validMap[v] = struct{}{}
-	}
-
-	var result error
-	for _, item := range list.Items {
-		key := item.Keys[0].Token.Value().(string)
-		if _, ok := validMap[key]; !ok {
-			result = multierror.Append(result, fmt.Errorf("invalid key %q on line %d", key, item.Assign.Line))
-		}
-	}
-
-	return result
 }

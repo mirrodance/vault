@@ -141,10 +141,7 @@ func (b *backend) credReadOperation(ctx context.Context, req *logical.Request, f
 		}
 	}
 	if respErr != nil {
-		return nil, err
-	}
-	if resp == nil {
-		return nil, nil
+		return nil, respErr
 	}
 	return resp, nil
 }
@@ -158,7 +155,7 @@ func (b *backend) generateAndReturnCreds(ctx context.Context, storage logical.St
 		return nil, errors.New("the config is currently unset")
 	}
 
-	newPassword, err := util.GeneratePassword(engineConf.PasswordConf.Length)
+	newPassword, err := util.GeneratePassword(engineConf.PasswordConf.Formatter, engineConf.PasswordConf.Length)
 	if err != nil {
 		return nil, err
 	}

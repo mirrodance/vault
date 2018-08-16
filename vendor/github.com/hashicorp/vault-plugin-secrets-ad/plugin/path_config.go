@@ -3,8 +3,9 @@ package plugin
 import (
 	"context"
 	"errors"
-	"fmt"
+	"time"
 
+	"github.com/hashicorp/vault-plugin-secrets-ad/plugin/client"
 	"github.com/hashicorp/vault-plugin-secrets-ad/plugin/util"
 	"github.com/hashicorp/vault/helper/ldaputil"
 	"github.com/hashicorp/vault/logical"
@@ -31,7 +32,7 @@ func (b *backend) readConfig(ctx context.Context, storage logical.Storage) (*con
 	if entry == nil {
 		return nil, nil
 	}
-	config := &configuration{&passwordConf{}, &ldaputil.ConfigEntry{}}
+	config := &configuration{&passwordConf{}, &client.ADConf{}}
 	if err := entry.DecodeJSON(config); err != nil {
 		return nil, err
 	}
@@ -67,6 +68,10 @@ func (b *backend) configFields() map[string]*framework.FieldSchema {
 		Default:     defaultPasswordLength,
 		Description: "The desired length of passwords that Vault generates.",
 	}
+	fields["formatter"] = &framework.FieldSchema{
+		Type:        framework.TypeString,
+		Description: `Text to insert the password into, ex. "customPrefix{{PASSWORD}}customSuffix".`,
+	}
 	return fields
 }
 
@@ -84,6 +89,7 @@ func (b *backend) configUpdateOperation(ctx context.Context, req *logical.Reques
 	ttl := fieldData.Get("ttl").(int)
 	maxTTL := fieldData.Get("max_ttl").(int)
 	length := fieldData.Get("length").(int)
+	formatter := fieldData.Get("formatter").(string)
 
 	if ttl == 0 {
 		ttl = int(b.System().DefaultLeaseTTL().Seconds())
@@ -100,16 +106,18 @@ func (b *backend) configUpdateOperation(ctx context.Context, req *logical.Reques
 	if maxTTL < 1 {
 		return nil, errors.New("max_ttl must be positive")
 	}
-	if length < util.MinimumPasswordLength {
-		return nil, fmt.Errorf("minimum password length is %d for sufficient complexity to be secure, though Vault recommends a higher length", util.MinimumPasswordLength)
-	}
-	passwordConf := &passwordConf{
-		TTL:    ttl,
-		MaxTTL: maxTTL,
-		Length: length,
+	if err := util.ValidatePwdSettings(formatter, length); err != nil {
+		return nil, err
 	}
 
-	config := &configuration{passwordConf, activeDirectoryConf}
+	passwordConf := &passwordConf{
+		TTL:       ttl,
+		MaxTTL:    maxTTL,
+		Length:    length,
+		Formatter: formatter,
+	}
+
+	config := &configuration{passwordConf, &client.ADConf{ConfigEntry: activeDirectoryConf}}
 	entry, err := logical.StorageEntryJSON(configStorageKey, config)
 	if err != nil {
 		return nil, err
@@ -145,6 +153,9 @@ func (b *backend) configReadOperation(ctx context.Context, req *logical.Request,
 		"upndomain":       config.ADConf.UPNDomain,
 		"tls_min_version": config.ADConf.TLSMinVersion,
 		"tls_max_version": config.ADConf.TLSMaxVersion,
+	}
+	if !config.ADConf.LastBindPasswordRotation.Equal(time.Time{}) {
+		configMap["last_bind_password_rotation"] = config.ADConf.LastBindPasswordRotation
 	}
 	for k, v := range config.PasswordConf.Map() {
 		configMap[k] = v

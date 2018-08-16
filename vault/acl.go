@@ -34,10 +34,11 @@ type PolicyCheckOpts struct {
 }
 
 type AuthResults struct {
-	ACLResults *ACLResults
-	Allowed    bool
-	RootPrivs  bool
-	Error      *multierror.Error
+	ACLResults  *ACLResults
+	Allowed     bool
+	RootPrivs   bool
+	DeniedError bool
+	Error       *multierror.Error
 }
 
 type ACLResults struct {
@@ -406,7 +407,7 @@ CHECK:
 	ret.Allowed = true
 	return
 }
-func (c *Core) performPolicyChecks(ctx context.Context, acl *ACL, te *TokenEntry, req *logical.Request, inEntity *identity.Entity, opts *PolicyCheckOpts) (ret *AuthResults) {
+func (c *Core) performPolicyChecks(ctx context.Context, acl *ACL, te *logical.TokenEntry, req *logical.Request, inEntity *identity.Entity, opts *PolicyCheckOpts) (ret *AuthResults) {
 	ret = new(AuthResults)
 
 	// First, perform normal ACL checks if requested. The only time no ACL

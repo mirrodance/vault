@@ -3,14 +3,17 @@ import Ember from 'ember';
 const { computed } = Ember;
 
 export default Ember.Component.extend({
+  modalContainer: computed(function() {
+    return document.getElementById('modal-wormhole');
+  }),
   isAnimated: false,
   isActive: false,
   tagName: 'span',
   trackingSource: computed('pageName', function() {
-    let trackingSource = "vaultui";
+    let trackingSource = 'vaultui';
     let pageName = this.get('pageName');
     if (pageName) {
-      trackingSource = trackingSource + "_" + encodeURIComponent(pageName);
+      trackingSource = trackingSource + '_' + encodeURIComponent(pageName);
     }
     return trackingSource;
   }),
