@@ -1,3 +1,12 @@
+---
+layout: "docs"
+page_title: "Aliyun - Secrets Engines"
+sidebar_current: "docs-secrets-aliyun"
+description: |-
+  The Aliyun secrets engine for Vault generates access keys dynamically based on
+  RAM policies.
+---
+
 # Aliyun Secrets Engine
 
 The Aliyun secrets engine generates Aliyun access credentials dynamically based on RAM policies. This generally makes working with Aliyun RAM easier, since it does not involve clicking in the web UI. Additionally, the process is codified and mapped to internal auth methods . The Aliyun RAM credentials are time-based and are automatically revoked when the Vault lease expires.
